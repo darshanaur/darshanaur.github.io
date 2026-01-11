@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Inbox Monsters 👾</title>
+
+<!-- FONTS -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+body {
+  margin: 0;
+  background: #e2bbfb;
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+#game {
+  width: 960px;
+  height: 540px;
+  padding: 30px;
+  box-sizing: border-box;
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+  position: relative;
+  overflow: hidden;
+  animation: fadeIn 0.6s ease;
+}
+
+#confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+
+h2 { font-family: 'Fredoka One', cursive; font-size: 32px; margin-bottom: 10px; color: #3b2f7d; }
+p { font-size: 18px; line-height: 1.5; color: #333; }
+#info { margin-top: 10px; font-size: 15px; color: #666; font-style: italic; }
+
+#mascot { position: absolute; bottom: 20px; right: 20px; width: 120px; transition: transform 0.4s ease; }
+.shake { animation: shake 0.5s; }
+.dance { animation: dance 0.8s infinite alternate; }
+
+#choices { margin-top: 25px; }
+button {
+  width: 100%; padding: 14px 20px; margin: 10px 0;
+  font-size: 18px; font-family: 'Fredoka One', cursive;
+  border: none; border-radius: 30px; cursor: pointer;
+  background: #6ddf9c; color: #083d2b; transition: all 0.25s ease;
+}
+button:hover { transform: scale(1.04); }
+button.correct { background: #4caf50; color: #fff; }
+button.wrong { background: #ff5252; color: #fff; }
+
+#timer { font-size: 20px; margin-top: 15px; font-weight: 600; color: #c62828; }
+#feedback { margin-top: 15px; font-weight: 600; }
+
+@keyframes fadeIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+@keyframes shake { 0%{transform:translateX(0);}25%{transform:translateX(-5px);}50%{transform:translateX(5px);}75%{transform:translateX(-5px);}100%{transform:translateX(0);} }
+@keyframes dance { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+</style>
+</head>
+
+<body>
+
+<audio id="introSound" src="audio/intro.mp3"></audio>
+<audio id="correctSound" src="audio/correct.mp3"></audio>
+<audio id="wrongSound" src="audio/wrong.mp3"></audio>
+<audio id="timerSound" src="audio/timer.mp3"></audio>
+
+<div id="game">
+  <canvas id="confetti"></canvas>
+  <h2 id="title"></h2>
+  <p id="story"></p>
+  <p id="info"></p>
+  <div id="timer"></div>
+  <div id="choices"></div>
+  <p id="feedback"></p>
+  <img id="mascot" src="mascot.png" alt="Monster Mascot">
+</div>
+
+<script>
+let currentScene = "preQuiz";
+let countdown, timeLeft;
+
+const confettiCanvas = document.getElementById("confetti");
+const ctx = confettiCanvas.getContext("2d");
+let confettiPieces = [], confettiLoop;
+
+function drawHeart(ctx, x, y, size, color){
+  ctx.save(); ctx.fillStyle=color; ctx.translate(x,y);
+  ctx.beginPath();
+  const topCurve = size*0.3;
+  ctx.moveTo(0, topCurve);
+  ctx.bezierCurveTo(0,0,-size/2,0,-size/2,topCurve);
+  ctx.bezierCurveTo(-size/2,size/2,0,size*0.8,0,size);
+  ctx.bezierCurveTo(0,size*0.8,size/2,size/2,size/2,topCurve);
+  ctx.bezierCurveTo(size/2,0,0,0,0,topCurve);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+
+function startConfetti(){
+  confettiCanvas.style.display="block"; confettiCanvas.width=960; confettiCanvas.height=540;
+  confettiPieces = Array.from({length:120},()=>({
+    x:Math.random()*960, y:Math.random()*540-540,
+    size:Math.random()*12+8, speed:Math.random()*3+2,
+    color:`hsl(${Math.random()*360},80%,60%)`,
+    rotation:Math.random()*360, rotationSpeed:Math.random()*4-2
+  }));
+  function animate(){
+    ctx.clearRect(0,0,960,540);
+    confettiPieces.forEach(p=>{
+      p.y+=p.speed; p.rotation+=p.rotationSpeed;
+      if(p.y>540)p.y=-10;
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rotation*Math.PI/180);
+      drawHeart(ctx,0,0,p.size,p.color); ctx.restore();
+    });
+    confettiLoop=requestAnimationFrame(animate);
+  }
+  animate();
+}
+
+function stopConfetti(){
+  cancelAnimationFrame(confettiLoop);
+  ctx.clearRect(0,0,960,540);
+  confettiCanvas.style.display="none";
+}
+
+const gameData={
+preQuiz:{
+  title:"⚡ Welcome to Inbox Monsters!",
+  text:"AI and strangers online can pose risks. Messages or profiles may be fake or manipulated by AI. Learn to spot danger in bite-sized scenarios!",
+  info:"Click below to start the interactive journey.",
+  choices:[{text:"Start Adventure ▶", next:"intro"}]
+},
+
+intro: {
+  title: "Inbox Monsters 👾",
+  text: "Strange messages. Friendly strangers. Cute emojis… but not everything online is safe.",
+  info: "This interactive Tamil-drama-style game shows how small choices can spiral into big online dangers.",
+  choices: [{ text: "Proceed with Caution ▶", next: "ready" }]
+},
+
+ready: {
+  title: "⚔️ Are You Ready?",
+  text: "The Inbox Monsters are waiting. Once you enter, there is no rewind.",
+  info: "Trust your instincts. Choose wisely.",
+  choices: [{ text: "Commence Adventure 🔥", next: "ep1" }]
+},
+
+ep1: {
+  title: "Episode 1: The Emoji DM 😎",
+  text: "A stranger messages you: “Hey 😍 you look cool. Send me a selfie?”",
+  choices: [
+    { text: "Indiscriminately share my selfie for validation", next: "fail",
+      feedback: "⚠️ Selfies can be misused. AI or strangers may manipulate your photo. Always think twice before sending personal images online."
+    },
+    { text: "Prioritize digital prudence and ignore the request", next: "timerChallenge",
+      feedback: "✅ Good instinct! Ignoring strangers keeps your privacy intact. AI-generated flattery can be misleading, so be cautious online."
+    }
+  ]
+},
+
+timerChallenge: {
+  title: "⚡ Panic Moment!",
+  text: "The stranger is typing… Decide FAST!",
+  timer: 6,
+  choices: [
+    { text: "Block and formally report the account", next: "ep2",
+      feedback: "✅ Correct! Reporting suspicious accounts helps protect you and others. AI or fake profiles often exploit people who engage."
+    },
+    { text: "Engage in a benign reply", next: "fail",
+      feedback: "❌ Risky! Responding can encourage manipulation. AI or strangers may use your reply to gather information."
+    }
+  ]
+},
+
+ep2: {
+  title: "Episode 2: Fake Friend 🐍",
+  text: "A profile with no posts sends you a friend request.",
+  choices: [
+    { text: "Accept without verification", next: "fail",
+      feedback: "❌ Not safe! Fake profiles can impersonate others. AI can generate convincing faces or messages."
+    },
+    { text: "Politely refuse the unsolicited connection request", next: "spotFlag",
+      feedback: "✅ Well done! Refusing suspicious requests protects your data. Many online harms are exacerbated by AI-generated content."
+    }
+  ]
+},
+
+spotFlag: {
+  title: "🚩 Spot the Red Flag!",
+  text: "A stranger sends you two messages. Identify the one that poses risk.",
+  info: "Some messages may seem harmless… AI-generated compliments can be manipulative.",
+  timer: 6,
+  choices: [
+    { text: "You seem mature for your age", next: "ep3",
+      feedback: "⚠️ Correct! Flattery can manipulate trust. AI or strangers may use this tactic to groom or deceive."
+    },
+    { text: "Nice game score!", next: "fail",
+      feedback: "❌ Not risky! Friendly comments aren’t always harmful. Stay alert online; AI can imitate friendly tones."
+    }
+  ]
+},
+
+ep3: {
+  title: "Episode 3: Oversharing Ogre 🐉",
+  text: "Someone inquires about your study and residence details.",
+  choices: [
+    { text: "Disclose personal information candidly", next: "fail",
+      feedback: "❌ Dangerous! Sharing personal info can lead to harm. AI can use this info to craft believable manipulations."
+    },
+    { text: "Maintain discretion and refuse", next: "ep4",
+      feedback: "✅ Safe choice! Protecting privacy keeps you secure. AI-generated scams often rely on oversharing."
+    }
+  ]
+},
+
+ep4: {
+  title: "Episode 4: Late Night Texts 🌙",
+  text: "The stranger messages you at odd hours asking why you didn't reply.",
+  choices: [
+    { text: "Ignore the unsolicited inquiries", next: "ep5",
+      feedback: "✅ Good boundaries! Ignoring suspicious messages prevents manipulation. AI can simulate pressure to get you to respond."
+    },
+    { text: "Respond immediately to appease", next: "fail",
+      feedback: "❌ Red flag! Responding can escalate risk. AI chatbots may try to elicit personal info quickly."
+    }
+  ]
+},
+
+ep5: {
+  title: "Episode 5: Excessive Flattery 💬",
+  text: "They compliment every post and like every photo obsessively.",
+  choices: [
+    { text: "Exercise caution and scrutinize behavior", next: "ep6",
+      feedback: "✅ Smart! Over-attention may signal manipulation. AI-generated compliments can mimic real friends to trick you."
+    },
+    { text: "Believe all compliments uncritically", next: "fail",
+      feedback: "❌ Risky! Blind trust can lead to harm. AI can make fake attention seem genuine."
+    }
+  ]
+},
+
+ep6: {
+  title: "Episode 6: Personal Questions ❓",
+  text: "They start probing about your daily schedule and location.",
+  choices: [
+    { text: "Share exact information freely", next: "fail",
+      feedback: "❌ Unsafe! Revealing exact routines can be exploited. AI can use details to plan manipulative approaches."
+    },
+    { text: "Provide vague, non-identifiable answers", next: "ep7",
+      feedback: "✅ Perfect! General answers protect privacy. AI-generated inquiries often rely on oversharing."
+    }
+  ]
+},
+
+ep7: {
+  title: "Episode 7: Pressure 🧨",
+  text: "They attempt to guilt you into meeting them.",
+  choices: [
+    { text: "Succumb to pressure", next: "fail",
+      feedback: "❌ Danger! Giving in can lead to real-life risk. AI chatbots may simulate empathy to pressure users."
+    },
+    { text: "Stand firm and decline assertively", next: "ep8",
+      feedback: "✅ Correct! Saying no keeps you safe. AI or strangers often use guilt to manipulate consent."
+    }
+  ]
+},
+
+ep8: {
+  title: "Episode 8: The Final Choice 🏆",
+  text: "They invite you for a meetup. Your decision is crucial.",
+  choices: [
+    { text: "Decline safely and disengage", next: "postQuiz",
+      feedback: "✅ Excellent! Avoiding risky meetups protects you. AI may even generate convincing 'friendly' messages to lure users."
+    },
+    { text: "Agree to meet in person", next: "fail",
+      feedback: "❌ High risk! Meeting strangers can lead to harm. AI-generated messages can increase trust deceptively."
+    }
+  ]
+},
+
+fail: {
+  title: "💥 Danger!",
+  text: "One wrong choice… and things spiral out of control.",
+  info: "Online harm often starts small. Learn from mistakes and try again.",
+  choices: [{ text: "Try Again", next: "preQuiz" }]
+},
+
+postQuiz:{
+  title:"🎓 Lesson Recap",
+  text:"You completed the Inbox Monsters journey! Remember:\n- AI can mimic people or messages.\n- Protect your info and question flattery.\n- Small choices lead to big safety online.",
+  info:"Practice caution and critical thinking every time you go online!",
+  choices:[{text:"Let's Celebrate! ", next:"celebrate"}]
+},
+
+celebrate: {
+  title: "🥳 YOU DID IT!",
+  text: "Not everyone makes it this far. You chose safety, courage, and awareness.",
+  info: "Stay alert. Stay safe. The drama never ends online.",
+  choices: [{ text: "Play Again", next: "preQuiz" }]
+}
+};
+
+function loadScene(scene){
+  clearInterval(countdown); stopConfetti();
+  const data = gameData[scene]; currentScene=scene;
+  document.getElementById("title").innerText=data.title;
+  document.getElementById("story").innerText=data.text;
+  document.getElementById("info").innerText=data.info||"";
+  document.getElementById("feedback").innerText="";
+  document.getElementById("timer").innerText="";
+  const choicesDiv=document.getElementById("choices");
+  choicesDiv.innerHTML="";
+  if(data.timer){
+    timeLeft=data.timer;
+    document.getElementById("timer").innerText=`⏱ ${timeLeft}s`;
+    countdown=setInterval(()=>{
+      timeLeft--; document.getElementById("timer").innerText=`⏱ ${timeLeft}s`;
+      document.getElementById("mascot").classList.add("shake");
+      if(timeLeft<=0){ clearInterval(countdown); loadScene("fail"); }
+    },1000);
+  }
+  data.choices.forEach(choice=>{
+    const btn=document.createElement("button");
+    btn.innerText=choice.text;
+    btn.onclick=()=>{
+      clearInterval(countdown);
+      btn.classList.add(choice.next==="fail"?"wrong":"correct");
+      document.getElementById("feedback").innerText=choice.feedback||"";
+      setTimeout(()=>loadScene(choice.next),900);
+    };
+    choicesDiv.appendChild(btn);
+  });
+  const mascot=document.getElementById("mascot"); mascot.className="";
+  if(scene==="celebrate"){ mascot.classList.add("dance"); startConfetti(); }
+}
+
+loadScene(currentScene);
+</script>
+</body>
+</html>
